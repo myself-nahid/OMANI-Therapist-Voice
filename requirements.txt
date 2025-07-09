@@ -1,0 +1,17 @@
+# Core Frameworks
+fastapi
+uvicorn
+streamlit
+streamlit-audiorecorder
+
+# AI & Machine Learning
+openai
+google-generativeai
+google-cloud-texttospeech
+transformers
+torch
+scipy # For saving wav files
+
+# Utilities
+python-dotenv
+requests

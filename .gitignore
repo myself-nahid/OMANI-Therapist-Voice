@@ -9,6 +9,8 @@ venv/
 env/
 .venv/
 .env/
+.conda
+.conda/
 
 # Distribution / packaging
 *.egg
