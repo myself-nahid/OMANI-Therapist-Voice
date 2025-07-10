@@ -1,5 +1,6 @@
 # Core Frameworks
-fastapi
+fastapi>=0.100.0 
+pydantic>=2.0
 uvicorn
 streamlit
 streamlit-audiorecorder
@@ -7,11 +8,15 @@ streamlit-audiorecorder
 # AI & Machine Learning
 openai
 google-generativeai
-google-cloud-texttospeech
+soundfile
+# google-cloud-texttospeech
 transformers
 torch
 scipy # For saving wav files
 
+
 # Utilities
 python-dotenv
 requests
+
+python-multipart

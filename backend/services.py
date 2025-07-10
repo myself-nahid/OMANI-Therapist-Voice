@@ -1,10 +1,15 @@
 # backend/services.py
 import os
+import io
 import openai
 import google.generativeai as genai
-from google.cloud import texttospeech
 from transformers import pipeline
-from prompts import get_system_prompt
+from backend.prompts import get_system_prompt
+import torch
+import soundfile as sf
+
+# --- NEW: Import MMS model components from transformers ---
+from transformers import VitsModel, AutoTokenizer
 
 # --- Initialize Clients and Models (Load only once) ---
 # OpenAI
@@ -14,11 +19,16 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 genai.configure(api_key=os.getenv("GOOGLE_AI_STUDIO_API_KEY"))
 gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Google TTS
-tts_client = texttospeech.TextToSpeechClient()
-
 # Hugging Face Emotion Detection
 emotion_classifier = pipeline("text-classification", model="bhadresh-savani/bert-base-go-emotion", top_k=1)
+
+
+# --- NEW: Load the MMS Text-to-Speech model and tokenizer ---
+print("Loading MMS TTS model for Arabic...")
+# This will download the model (around 2GB) the first time you run it.
+tts_model = VitsModel.from_pretrained("facebook/mms-tts-ara")
+tts_tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-ara")
+print("MMS TTS model loaded successfully.")
 
 # --- Service Functions ---
 
@@ -26,12 +36,11 @@ def transcribe_audio(audio_file_path: str) -> str:
     """Transcribes audio using OpenAI Whisper API."""
     try:
         with open(audio_file_path, "rb") as audio_file:
-            # Using Omani Arabic ('ar') as the language hint
             transcription = openai.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
                 language="ar",
-                prompt="هذه محادثة باللهجة العمانية." # Prompt to hint at the dialect
+                prompt="هذه محادثة باللهجة العمانية."
             )
         return transcription.text
     except Exception as e:
@@ -53,14 +62,12 @@ def generate_response(history: list, user_text: str, emotion: str) -> str:
     """Generates a response using GPT-4o with Gemini as a fallback."""
     system_prompt = get_system_prompt()
     
-    # Construct the message list for the API call
     messages = [
         {"role": "system", "content": system_prompt},
     ]
     messages.extend(history)
     messages.append({"role": "user", "content": f"(Detected Emotion: {emotion}) {user_text}"})
 
-    # Primary Model: GPT-4o
     try:
         print("Attempting to generate response with GPT-4o...")
         response = openai.chat.completions.create(
@@ -72,10 +79,7 @@ def generate_response(history: list, user_text: str, emotion: str) -> str:
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"GPT-4o failed: {e}. Falling back to Gemini Flash.")
-        
-        # Fallback Model: Gemini 1.5 Flash
         try:
-            # Gemini has a different message format
             gemini_history = [m for m in messages if m['role'] != 'system']
             full_prompt = f"{system_prompt}\n\n---\n\nConversation History:\n{gemini_history}\n\n---\n\nUser said: {user_text}\n(Detected Emotion: {emotion})"
             
@@ -83,26 +87,32 @@ def generate_response(history: list, user_text: str, emotion: str) -> str:
             return response.text.strip()
         except Exception as e_gemini:
             print(f"Gemini fallback also failed: {e_gemini}")
-            return "عذراً، أواجه مشكلة فنية في الوقت الحالي. هل يمكنك إعادة ما قلته؟" # Sorry, I'm having a technical issue...
+            return "عذراً، أواجه مشكلة فنية في الوقت الحالي. هل يمكنك إعادة ما قلته؟"
 
+# --- REPLACED: The synthesize_speech function ---
 def synthesize_speech(text: str) -> bytes:
-    """Synthesizes text to speech using Google Cloud TTS."""
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    """
+    Synthesizes text to speech using the local Facebook MMS model.
+    The output format is WAV, which we will convert to MP3/MPEG for streaming.
+    """
+    print(f"Synthesizing speech for text: {text}")
+    inputs = tts_tokenizer(text, return_tensors="pt")
+
+    with torch.no_grad():
+        output = tts_model(**inputs).waveform
+
+    # The output is a raw waveform. We need to save it as a proper audio file in memory.
+    # The MMS model's sampling rate is 16000 Hz.
+    sampling_rate = 16000
     
-    # Select a high-quality Arabic voice.
-    # ar-XA-Wavenet-B is a good, calm female voice. Test for Omani accent suitability.
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="ar-XA",
-        name="ar-XA-Wavenet-B",
-        ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
-    )
+    # Use an in-memory buffer (BytesIO) to hold the WAV file data.
+    buffer = io.BytesIO()
+    sf.write(buffer, output.cpu().numpy().squeeze(), sampling_rate, format='WAV')
     
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
-    )
+    # Reset buffer's position to the beginning to be read.
+    buffer.seek(0)
     
-    response = tts_client.synthesize_speech(
-        input=synthesis_input, voice=voice, audio_config=audio_config
-    )
-    
-    return response.audio_content
+    # Return the raw bytes of the WAV file.
+    # Most browsers can play WAV, but we can also convert to MP3 if needed.
+    # For now, let's keep it simple. We will tell the frontend it's 'audio/wav'.
+    return buffer.read()
