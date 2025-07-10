@@ -116,3 +116,31 @@ def synthesize_speech(text: str) -> bytes:
     # Most browsers can play WAV, but we can also convert to MP3 if needed.
     # For now, let's keep it simple. We will tell the frontend it's 'audio/wav'.
     return buffer.read()
+
+# --- NEW: WARM-UP FUNCTION ---
+def warmup_models():
+    """
+    Warms up the AI models to reduce latency on the first user request.
+    """
+    print("Warming up models...")
+    # 1. Warm up Emotion Detection
+    try:
+        detect_emotion("This is a test to warm up the emotion detection model.")
+        print("Emotion detection model is warm.")
+    except Exception as e:
+        print(f"Could not warm up emotion model: {e}")
+
+    # 2. Warm up TTS model
+    try:
+        # Synthesize a short, silent, or simple phrase.
+        # This forces the model to load all necessary components and caches.
+        print("Warming up TTS model... (This may take a moment)")
+        synthesize_speech("أهلاً")
+        print("TTS model is warm.")
+    except Exception as e:
+        print(f"Could not warm up TTS model: {e}")
+    
+    print("--- Models are warm and ready ---")
+
+# --- Run the warm-up process when the service starts ---
+warmup_models()
