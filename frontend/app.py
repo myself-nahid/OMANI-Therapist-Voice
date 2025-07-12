@@ -3,7 +3,7 @@ import streamlit as st
 import requests
 import uuid
 from audiorecorder import audiorecorder
-import os # Good practice to import os if using it
+import os
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -14,12 +14,11 @@ st.set_page_config(
 # --- Session State Initialization ---
 if 'session_id' not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
-    
-if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
+    # --- NEW: Key for resetting the audio recorder ---
+    st.session_state.recorder_key = "recorder_0"
 
 # --- Backend API URL ---
-# Use an environment variable for deployment flexibility, with a local fallback
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000/chat")
 
 # --- UI Components ---
@@ -29,7 +28,7 @@ st.markdown("---")
 
 # Display chat history
 if st.session_state.chat_history:
-    for i, (user_msg, ai_audio, media_type) in enumerate(st.session_state.chat_history):
+    for user_msg, ai_audio, media_type in st.session_state.chat_history:
         # Display user message
         message_alignment = "flex-end"
         message_bg_color = "linear-gradient(135deg, #00B2A9 0%, #00827B 100%)"
@@ -43,48 +42,46 @@ if st.session_state.chat_history:
 
         # Display AI response
         st.write("**إليل:**")
-        st.audio(ai_audio, format=media_type) # Use the stored media type
+        st.audio(ai_audio, format=media_type)
 
 st.markdown("---")
 
 # Audio recorder button at the bottom
 st.write("اضغط للتحدث مع إليل")
-audio = audiorecorder("▶️ تسجيل", "⏹️ إيقاف")
+# --- MODIFIED: Pass the unique key to the component ---
+audio = audiorecorder("▶️ تسجيل", "⏹️ إيقاف", key=st.session_state.recorder_key)
 
+
+# --- NEW, SIMPLIFIED LOGIC ---
 if len(audio) > 0:
+    # Get the audio recording bytes
     audio_bytes = audio.export().read()
 
     with st.spinner("إليل يستمع ويفكر..."):
         try:
-            # --- THIS IS THE BLOCK TO CHANGE ---
-            
-            # 1. Prepare the files payload
+            # Prepare data for the API request
             files = {'audio_file': ('recording.wav', audio_bytes, 'audio/wav')}
-            
-            # 2. Prepare the data payload (for form fields)
             data = {'session_id': st.session_state.session_id}
 
-            # 3. Send the request with BOTH files and data.
-            #    Remove the 'params' argument.
+            # Send request to backend
             response = requests.post(BACKEND_URL, files=files, data=data)
-            
-            # --- END OF CHANGE BLOCK ---
 
             if response.status_code == 200:
-                # Get the media type from the response headers
                 media_type = response.headers.get('Content-Type', 'audio/wav')
-                
-                # A better implementation would have the backend return a JSON object
-                # with both the transcribed text and the audio response.
-                # For now, let's just use a placeholder for the user's message.
                 user_transcribed_text = "(قمت بتسجيل رسالة صوتية)"
                 ai_audio_response = response.content
 
-                # Update chat history including the media type
+                # Update chat history
                 st.session_state.chat_history.append(
                     (user_transcribed_text, ai_audio_response, media_type)
                 )
+
+                # --- THE DEFINITIVE FIX ---
+                # Increment the key to force a full re-initialization of the recorder
+                current_key_index = int(st.session_state.recorder_key.split('_')[1])
+                st.session_state.recorder_key = f"recorder_{current_key_index + 1}"
                 
+                # Rerun to display the new message and the new, empty recorder
                 st.rerun()
 
             else:
