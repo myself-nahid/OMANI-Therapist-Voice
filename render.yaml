@@ -20,6 +20,8 @@ services:
     build:
       apt:
         - ffmpeg
+        - libportaudio2
+        - portaudioc19-dev
         
     buildCommand: "pip install -r requirements.txt"
     startCommand: "streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0"
