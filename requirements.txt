@@ -19,4 +19,5 @@ scipy # For saving wav files
 python-dotenv
 requests
 
+# parse multipart/form-data
 python-multipart

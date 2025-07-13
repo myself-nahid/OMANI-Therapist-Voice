@@ -6,7 +6,7 @@ DATABASE_NAME = "backend/conversation.db"
 def init_db():
     conn = sqlite3.connect(DATABASE_NAME)
     cursor = conn.cursor()
-    # Create table to store conversation turns
+    # Create table 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS conversation_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
