@@ -2,12 +2,15 @@ services:
   - type: web
     name: omani-therapist-backend
     env: python
-    pythonVersion: "3.11" 
+    
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 60"
     healthCheckPath: /
     
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+        
       - key: OPENAI_API_KEY
         fromSecret: OPENAI_API_KEY
       - key: GOOGLE_AI_STUDIO_API_KEY
@@ -16,7 +19,6 @@ services:
   - type: web
     name: omani-therapist-frontend
     env: python
-    pythonVersion: "3.11" 
     
     build:
       apt:
@@ -28,6 +30,9 @@ services:
     startCommand: "streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0"
     
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+        
       - key: BACKEND_URL
         fromService:
           type: web
