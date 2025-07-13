@@ -1,0 +1,45 @@
+services:
+  # Backend Service (FastAPI)
+  # This service handles all AI processing, including STT, LLM calls, and local TTS.
+  - type: web
+    name: omani-therapist-backend
+    env: python
+    # The 'Starter' plan is recommended if the free tier runs out of memory
+    # due to the local AI models. Comment out to use the free tier first.
+    # plan: starter 
+
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 60"
+    
+    healthCheckPath: /
+    
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12 # Using a specific, stable Python version
+        
+      # Secrets must be configured in the Render Dashboard under Environment.
+      # These are not stored in the repository.
+      - key: OPENAI_API_KEY
+        fromSecret: OPENAI_API_KEY 
+      - key: GOOGLE_AI_STUDIO_API_KEY
+        fromSecret: GOOGLE_AI_STUDIO_API_KEY 
+
+  # Frontend Service (Streamlit)
+  # This service provides the user-facing voice interface.
+  - type: web
+    name: omani-therapist-frontend
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0"
+    
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+        
+      # This critical variable connects the frontend to the backend.
+      # Render automatically injects the backend's URL.
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: omani-therapist-backend
+          property: url # This will be something like https://omani-therapist-backend.onrender.com
